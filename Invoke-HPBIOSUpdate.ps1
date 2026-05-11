@@ -117,33 +117,31 @@ Process {
 		$HPFirmwareUpdRec = Get-ChildItem -Path $Path -Filter "*.exe" -Recurse | Where-Object { $_.Name -like "HpFirmwareUpdRec.exe" } | Select-Object -ExpandProperty FullName	
 	}
 
-    # Attempt to detect HPFirmwareUpdRec utility file name
+    # Attempt to detect HPQFlash utility file name
 	if (([Environment]::Is64BitOperatingSystem) -eq $true) {
-		$HPFlashUtil = Get-ChildItem -Path $Path -Filter "*.exe" -Recurse | Where-Object { $_.Name -like "HPQFlash.exe" } | Select-Object -ExpandProperty FullName
+		$HPFlashUtil = Get-ChildItem -Path $Path -Filter "*.exe" -Recurse | Where-Object { $_.Name -like "HPQFlash64.exe" } | Select-Object -ExpandProperty FullName
 	}
 	else {
-		$HPFlashUtil = Get-ChildItem -Path $Path -Filter "*.exe" -Recurse | Where-Object { $_.Name -like "HPQFlash64.exe" } | Select-Object -ExpandProperty FullName	
+		$HPFlashUtil = Get-ChildItem -Path $Path -Filter "*.exe" -Recurse | Where-Object { $_.Name -like "HPQFlash.exe" } | Select-Object -ExpandProperty FullName
 	}
 
-	if ($HPBIOSUPDUtil -ne $null) {	
+	if ($HPBIOSUPDUtil -ne $null) {
 		# Set required switches for silent upgrade of the bios and logging
 		Write-CMLogEntry -Value "Using HPBIOSUpdRec BIOS update method" -Severity 1
 		# This -r switch appears to be undocumented, which is a shame really, but this prevents the reboot without exit code. The command now returns a correct exit code and lets ConfigMgr reboot the computer gracefully.
 		$FlashSwitches = " -s -r"
 		$FlashUtility = $HPBIOSUPDUtil
 	}
-
-	if ($HPFirmwareUpdRec -ne $null) {	
+	elseif ($HPFirmwareUpdRec -ne $null) {
 		# Set required switches for silent upgrade of the bios and logging
 		Write-CMLogEntry -Value "Using HPFirmwareUpdRec BIOS update method" -Severity 1
 		# This -r switch appears to be undocumented, which is a shame really, but this prevents the reboot without exit code. The command now returns a correct exit code and lets ConfigMgr reboot the computer gracefully.
 		$FlashSwitches = " -s -r"
 		$FlashUtility = $HPFirmwareUpdRec
 	}
-
-	if ($HPFlashUtil -ne $null) {	
+	elseif ($HPFlashUtil -ne $null) {
 		# Set required switches for silent upgrade of the bios and logging
-		Write-CMLogEntry -Value "Using HPFirmwareUpdRec BIOS update method" -Severity 1
+		Write-CMLogEntry -Value "Using HPQFlash BIOS update method" -Severity 1
 		# This -r switch appears to be undocumented, which is a shame really, but this prevents the reboot without exit code. The command now returns a correct exit code and lets ConfigMgr reboot the computer gracefully.
 		$FlashSwitches = " -s -r"
 		$FlashUtility = $HPFlashUtil
@@ -163,7 +161,7 @@ Process {
 	}
 	
 	# Determine if we're running in WinPE or Full OS
-	if (($TSEnvironment -ne $null) -and ($TSEnvironment.Value("_SMSTSinWinPE") -eq $true)) {
+	if (($TSEnvironment -ne $null) -and ($TSEnvironment.Value("_SMSTSinWinPE") -eq "true")) {
 		try {		
 			# Start flash update process
 			Write-CMLogEntry -Value "Running Flash Update: $($FlashUtility)$($FlashSwitches)" -Severity 1
@@ -192,7 +190,7 @@ Process {
 		# Supend Bitlocker if $OSVolumeEncypted is $true
 		if ($OSDriveEncrypted -eq $true) {
 			Write-CMLogEntry -Value "Suspending BitLocker protected volume: $($env:SystemDrive)" -Severity 1
-			Manage-Bde -Protectors -Disable C:
+			Manage-Bde -Protectors -Disable $env:SystemDrive
 		}		
 		
 		# Start Bios update process
