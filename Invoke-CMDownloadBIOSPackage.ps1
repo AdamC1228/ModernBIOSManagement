@@ -62,7 +62,8 @@
 	Author:      Nickolaj Andersen / Maurice Daly
     Contact:     @NickolajA / @MoDaly_IT
     Created:     2020-10-30
-    Updated:     2020-10-30
+    Updated:     2026-05-11
+	Updated by:  Adam Cantrell
     
     Version history:
     3.0.0 - (2020-10-30) - Script created
@@ -71,6 +72,7 @@
 	3.0.2 - (2020-12-09) - Added new functionality to be able to read a custom Application ID URI, if the default of https://ConfigMgrService is not defined on the ServerApp.
 	3.0.3 - (2020-12-10) - Fixed issue in WinPE, with addition of baremetal parameter switch (now default)
 						   Added BIOSUpdate parameter switch for Full OS deployments
+	3.1.0 - (2026-05-11) - Multiple Bug Fixes and logic corrections. See git commit for full details.
 
 #>
 [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = "BareMetal")]
@@ -124,17 +126,18 @@ param (
 	[string]$SystemSKU
 )
 Begin {
-	
+	Set-StrictMode -Version Latest
+
 	# Load Microsoft.SMS.TSEnvironment COM object
 	if ($PSCmdLet.ParameterSetName -notlike "Debug") {
 		try {
-			$TSEnvironment = New-Object -ComObject "Microsoft.SMS.TSEnvironment" -ErrorAction Stop
+			$Script:TSEnvironment = New-Object -ComObject "Microsoft.SMS.TSEnvironment" -ErrorAction Stop
 		} catch [System.Exception] {
 			Write-Warning -Message "Unable to construct Microsoft.SMS.TSEnvironment object"; exit
 		}
 	}
 
-	# Set Security Protocol (TLS) 
+	# Set Security Protocol (TLS)
 	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 }
 Process {
@@ -222,7 +225,6 @@ Process {
 		# Invoke executable and wait for process to exit
 		try {
 			$Invocation = Start-Process @SplatArgs
-			$Handle = $Invocation.Handle
 			$Invocation.WaitForExit()
 		} catch [System.Exception] {
 			Write-Warning -Message $_.Exception.Message; break
@@ -587,19 +589,19 @@ Process {
 		try {
 			Write-CMLogEntry -Value " - Attempting to locate PSIntuneAuth module" -Severity 1
 			$PSIntuneAuthModule = Get-InstalledModule -Name "PSIntuneAuth" -ErrorAction Stop -Verbose:$false
-			if ($PSIntuneAuthModule -ne $null) {
+			if ($null -ne $PSIntuneAuthModule) {
 				Write-CMLogEntry -Value " - Authentication module detected, checking for latest version" -Severity 1
 				$LatestModuleVersion = (Find-Module -Name "PSIntuneAuth" -ErrorAction SilentlyContinue -Verbose:$false).Version
 				if ($LatestModuleVersion -gt $PSIntuneAuthModule.Version) {
 					Write-CMLogEntry -Value " - Latest version of PSIntuneAuth module is not installed, attempting to install: $($LatestModuleVersion.ToString())" -Severity 1
-					$UpdateModuleInvocation = Update-Module -Name "PSIntuneAuth" -Scope CurrentUser -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
+					Update-Module -Name "PSIntuneAuth" -Scope CurrentUser -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
 				}
 			}
 		} catch [System.Exception] {
 			Write-CMLogEntry -Value " - Unable to detect PSIntuneAuth module, attempting to install from PSGallery" -Severity 2
 			try {
 				# Install NuGet package provider
-				$PackageProvider = Install-PackageProvider -Name "NuGet" -Force -Verbose:$false
+				Install-PackageProvider -Name "NuGet" -Force -Verbose:$false | Out-Null
 				
 				# Install PSIntuneAuth module
 				Install-Module -Name "PSIntuneAuth" -Scope AllUsers -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
@@ -650,7 +652,8 @@ Process {
 		)
 		# Construct array object to hold return value
 		$PackageArray = New-Object -TypeName System.Collections.ArrayList
-		
+		$AdminServiceResponse = $null
+
 		switch ($Script:AdminServiceEndpointType) {
 			"External" {
 				try {
@@ -706,7 +709,7 @@ Process {
 		}
 		
 		# Add returned driver package objects to array list
-		if ($AdminServiceResponse.value -ne $null) {
+		if ($null -ne $AdminServiceResponse.value) {
 			foreach ($Package in $AdminServiceResponse.value) {
 				$PackageArray.Add($Package) | Out-Null
 			}
@@ -750,7 +753,7 @@ Process {
 			}
 			
 			# Handle return value
-			if ($Packages -ne $null) {
+			if ($null -ne $Packages) {
 				Write-CMLogEntry -Value " - Retrieved a total of '$(($Packages | Measure-Object).Count)' BIOS packages from $($Script:PackageSource) matching operational mode: $($OperationalMode)" -Severity 1
 				return $Packages
 			} else {
@@ -892,12 +895,12 @@ Process {
 			"SystemSKUDetected" = $false
 		}
 		
-		if (($InputObject.Model -ne $null) -and (-not ([System.String]::IsNullOrEmpty($InputObject.Model)))) {
+		if (($null -ne $InputObject.Model) -and (-not ([System.String]::IsNullOrEmpty($InputObject.Model)))) {
 			Write-CMLogEntry -Value " - Computer model detection was successful" -Severity 1
 			$ComputerDetection.ModelDetected = $true
 		}
 		
-		if (($InputObject.SystemSKU -ne $null) -and (-not ([System.String]::IsNullOrEmpty($InputObject.SystemSKU)))) {
+		if (($null -ne $InputObject.SystemSKU) -and (-not ([System.String]::IsNullOrEmpty($InputObject.SystemSKU)))) {
 			Write-CMLogEntry -Value " - Computer SystemSKU detection was successful" -Severity 1
 			$ComputerDetection.SystemSKUDetected = $true
 		}
@@ -1058,8 +1061,8 @@ Process {
 		
 		if ($ComputerSystemType -notin @("Virtual Machine", "VMware Virtual Platform", "VirtualBox", "HVM domU", "KVM")) {
 			# Process packages returned from web service
-			if ($BIOSPackages -ne $null) {
-				if (($ComputerModel -ne $null) -and (-not ([System.String]::IsNullOrEmpty($ComputerModel))) -or (($SystemSKU -ne $null) -and (-not ([System.String]::IsNullOrEmpty($SystemSKU))))) {
+			if ($null -ne $BIOSPackages) {
+				if (($null -ne $ComputerSystemType) -and (-not ([System.String]::IsNullOrEmpty($ComputerSystemType))) -or (($null -ne $SystemSKU) -and (-not ([System.String]::IsNullOrEmpty($SystemSKU))))) {
 					# Determine computer model detection
 					if ([System.String]::IsNullOrEmpty($SystemSKU)) {
 						Write-CMLogEntry -Value "Computer detection method set to use ComputerModel" -Severity 1
@@ -1086,8 +1089,8 @@ Process {
 						
 						switch ($ComputerDetectionMethod) {
 							"ComputerModel" {
-								if ($PackageNameComputerModel -like $ComputerModel) {
-									Write-CMLogEntry -Value "Match found for computer model using detection method: $($ComputerDetectionMethod) ($($ComputerModel))" -Severity 1
+								if ($PackageNameComputerModel -like $ComputerSystemType) {
+									Write-CMLogEntry -Value "Match found for computer model using detection method: $($ComputerDetectionMethod) ($($ComputerSystemType))" -Severity 1
 									$ComputerDetectionResult = $true
 								}
 							}
@@ -1097,8 +1100,8 @@ Process {
 									$ComputerDetectionResult = $true
 								} else {
 									Write-CMLogEntry -Value "Unable to match computer model using detection method: $($ComputerDetectionMethod) ($($SystemSKU))" -Severity 2
-									if ($PackageNameComputerModel -like $ComputerModel) {
-										Write-CMLogEntry -Value "Fallback from SystemSKU match found for computer model instead using detection method: $($ComputerDetectionMethod) ($($ComputerModel))" -Severity 1
+									if ($PackageNameComputerModel -like $ComputerSystemType) {
+										Write-CMLogEntry -Value "Fallback from SystemSKU match found for computer model instead using detection method: $($ComputerDetectionMethod) ($($ComputerSystemType))" -Severity 1
 										$ComputerDetectionResult = $true
 									}
 								}
@@ -1130,13 +1133,17 @@ Process {
 							if ($ComputerManufacturer -match "Dell") {
 								Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -ComputerManufacturer $ComputerManufacturer
 							} elseif ($ComputerManufacturer -match "Lenovo") {
-								Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -AvailableBIOSReleaseDate $(($PackageList[0].Description).Split(":")[2].Trimend(")")) -ComputerManufacturer $ComputerManufacturer
+								$DescParts = ($PackageList[0].Description).Split(":")
+								$ReleaseDate = if ($DescParts.Count -ge 3) { $DescParts[2].TrimEnd(")") } else { [string]::Empty }
+								Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -AvailableBIOSReleaseDate $ReleaseDate -ComputerManufacturer $ComputerManufacturer
 							} elseif ($ComputerManufacturer -match "Hewlett-Packard|HP") {
 								Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -ComputerManufacturer $ComputerManufacturer
 							} elseif ($ComputerManufacturer -match "Microsoft") {
-								$NewBIOSAvailable = $true
+								if ($Script:PSCmdlet.ParameterSetName -notlike "Debug") {
+									$TSEnvironment.Value("NewBIOSAvailable") = $true
+								}
 							}
-							
+
 							if ($Script:PSCmdlet.ParameterSetName -notlike "Debug") {
 								if ($TSEnvironment.Value("NewBIOSAvailable") -eq $true) {
 									# Attempt to download BIOS package content
@@ -1168,13 +1175,14 @@ Process {
 							} elseif ($ComputerManufacturer -eq "Lenovo") {
 								$ComputerDescription = Get-WmiObject -Class Win32_ComputerSystemProduct | Select-Object -ExpandProperty Version
 								# Attempt to find exact model match for Lenovo models which overlap model types
-								$PackageList = $PackageList | Where-object {
+								$OriginalPackageList = $PackageList
+								$PackageList = $OriginalPackageList | Where-object {
 									($_.Name -like "*$ComputerDescription") -and ($_.Manufacturer -match $ComputerManufacturer)
 								} | Sort-object -Property SourceDate -Descending | Select-Object -First 1
-								
-								If ($PackageList -eq $null) {
+
+								if ($null -eq $PackageList) {
 									# Fall back to select the latest model type match if no model name match is found
-									$PackageList = $PackageList | Sort-object -Property SourceDate -Descending | Select-Object -First 1
+									$PackageList = $OriginalPackageList | Sort-object -Property SourceDate -Descending | Select-Object -First 1
 								}
 							} elseif ($ComputerManufacturer -match "Hewlett-Packard|HP") {
 								# Determine the latest BIOS package by creation date
@@ -1188,13 +1196,17 @@ Process {
 								if ($ComputerManufacturer -match "Dell") {
 									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -ComputerManufacturer $ComputerManufacturer
 								} elseif ($ComputerManufacturer -match "Lenovo") {
-									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -AvailableBIOSReleaseDate $(($PackageList[0].Description).Split(":")[2].Trimend(")")) -ComputerManufacturer $ComputerManufacturer
+									$DescParts = ($PackageList[0].Description).Split(":")
+									$ReleaseDate = if ($DescParts.Count -ge 3) { $DescParts[2].TrimEnd(")") } else { [string]::Empty }
+									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -AvailableBIOSReleaseDate $ReleaseDate -ComputerManufacturer $ComputerManufacturer
 								} elseif ($ComputerManufacturer -match "Hewlett-Packard|HP") {
 									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -ComputerManufacturer $ComputerManufacturer
 								} elseif ($ComputerManufacturer -match "Microsoft") {
-									$NewBIOSAvailable = $true
+									if ($Script:PSCmdlet.ParameterSetName -notlike "Debug") {
+										$TSEnvironment.Value("NewBIOSAvailable") = $true
+									}
 								}
-								
+
 								if ($Script:PSCmdlet.ParameterSetName -notlike "Debug") {
 									if ($TSEnvironment.Value("NewBIOSAvailable") -eq $true) {
 										$DownloadInvocation = Invoke-CMDownloadContent -PackageID $($PackageList[0].PackageID) -DestinationLocationType Custom -DestinationVariableName "OSDBIOSPackage" -CustomLocationPath "%_SMSTSMDataPath%\BIOSPackage"
