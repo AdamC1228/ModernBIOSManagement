@@ -44,6 +44,7 @@ param(
 	[string]$PasswordBin
 )
 Begin {	
+	Set-StrictMode -Version Latest
 	# Load Microsoft.SMS.TSEnvironment COM object
 	try {
 		$TSEnvironment = New-Object -ComObject Microsoft.SMS.TSEnvironment -ErrorAction Stop
@@ -125,21 +126,21 @@ Process {
 		$HPFlashUtil = Get-ChildItem -Path $Path -Filter "*.exe" -Recurse | Where-Object { $_.Name -like "HPQFlash.exe" } | Select-Object -ExpandProperty FullName
 	}
 
-	if ($HPBIOSUPDUtil -ne $null) {
+	if ($null -ne $HPBIOSUPDUtil) {
 		# Set required switches for silent upgrade of the bios and logging
 		Write-CMLogEntry -Value "Using HPBIOSUpdRec BIOS update method" -Severity 1
 		# This -r switch appears to be undocumented, which is a shame really, but this prevents the reboot without exit code. The command now returns a correct exit code and lets ConfigMgr reboot the computer gracefully.
 		$FlashSwitches = " -s -r"
 		$FlashUtility = $HPBIOSUPDUtil
 	}
-	elseif ($HPFirmwareUpdRec -ne $null) {
+	elseif ($null -ne $HPFirmwareUpdRec) {
 		# Set required switches for silent upgrade of the bios and logging
 		Write-CMLogEntry -Value "Using HPFirmwareUpdRec BIOS update method" -Severity 1
 		# This -r switch appears to be undocumented, which is a shame really, but this prevents the reboot without exit code. The command now returns a correct exit code and lets ConfigMgr reboot the computer gracefully.
 		$FlashSwitches = " -s -r"
 		$FlashUtility = $HPFirmwareUpdRec
 	}
-	elseif ($HPFlashUtil -ne $null) {
+	elseif ($null -ne $HPFlashUtil) {
 		# Set required switches for silent upgrade of the bios and logging
 		Write-CMLogEntry -Value "Using HPQFlash BIOS update method" -Severity 1
 		# This -r switch appears to be undocumented, which is a shame really, but this prevents the reboot without exit code. The command now returns a correct exit code and lets ConfigMgr reboot the computer gracefully.
@@ -161,7 +162,7 @@ Process {
 	}
 	
 	# Determine if we're running in WinPE or Full OS
-	if (($TSEnvironment -ne $null) -and ($TSEnvironment.Value("_SMSTSinWinPE") -eq "true")) {
+	if (($null -ne $TSEnvironment) -and ($TSEnvironment.Value("_SMSTSinWinPE") -eq "true")) {
 		try {		
 			# Start flash update process
 			Write-CMLogEntry -Value "Running Flash Update: $($FlashUtility)$($FlashSwitches)" -Severity 1
