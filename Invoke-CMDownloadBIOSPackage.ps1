@@ -277,7 +277,7 @@ Process {
 		
 		# Invoke download of package content
 		try {
-			if ($TSEnvironment.Value("_SMSTSInWinPE") -eq $false) {
+			if ($TSEnvironment.Value("_SMSTSInWinPE") -eq "false") {
 				Write-CMLogEntry -Value " - Starting package content download process (FullOS), this might take some time" -Severity 1
 				$ReturnCode = Invoke-Executable -FilePath (Join-Path -Path $env:windir -ChildPath "CCM\OSDDownloadContent.exe")
 			} else {
@@ -513,7 +513,7 @@ Process {
 		switch ($Script:DeploymentMode) {
 			"BareMetal" {
 				$SMSInWinPE = $TSEnvironment.Value("_SMSTSInWinPE")
-				if ($SMSInWinPE -eq $true) {
+				if ($SMSInWinPE -eq "true") {
 					Write-CMLogEntry -Value " - Detected that script was running within a task sequence in WinPE phase, automatically configuring AdminService endpoint type" -Severity 1
 					$Script:AdminServiceEndpointType = "Internal"
 				} else {
@@ -1062,11 +1062,9 @@ Process {
 				if (($ComputerModel -ne $null) -and (-not ([System.String]::IsNullOrEmpty($ComputerModel))) -or (($SystemSKU -ne $null) -and (-not ([System.String]::IsNullOrEmpty($SystemSKU))))) {
 					# Determine computer model detection
 					if ([System.String]::IsNullOrEmpty($SystemSKU)) {
-						Write-CMLogEntry -Value "Attempting to find a match for BIOS package: $($Package.PackageName) ($($Package.PackageID))" -Severity 1
-						Write-CMLogEntry -Value "Computer detection method set to use ComptuerModel" -Severity 1
+						Write-CMLogEntry -Value "Computer detection method set to use ComputerModel" -Severity 1
 						$ComputerDetectionMethod = "ComputerModel"
 					} else {
-						Write-CMLogEntry -Value "Attempting to find a match for BIOS package: $($Package.PackageName) ($($Package.PackageID))" -Severity 1
 						Write-CMLogEntry -Value "Computer detection method set to use SystemSKU" -Severity 1
 						$ComputerDetectionMethod = "SystemSKU"
 					}
@@ -1078,7 +1076,7 @@ Process {
 						# Computer detection method matching
 						$ComputerDetectionResult = $false
 						switch ($ComputerManufacturer) {
-							"Hewlett-Packard" {
+							"HP" {
 								$PackageNameComputerModel = $Package.Name.Replace("Hewlett-Packard", "HP").Split("-").Trim()[1]
 							}
 							Default {
@@ -1114,7 +1112,7 @@ Process {
 									Write-CMLogEntry -Value "Match found for computer model and manufacturer: $($Package.Name) ($($Package.PackageID))" -Severity 1
 									$PackageList.Add($Package) | Out-Null
 								} else {
-									Write-CMLogEntry -Value "Package does not meet computer model and manufacturer criteria: $($Package.PackageName) ($($Package.PackageID))" -Severity 2
+									Write-CMLogEntry -Value "Package does not meet computer model and manufacturer criteria: $($Package.Name) ($($Package.PackageID))" -Severity 2
 								}
 							}
 						}
@@ -1155,7 +1153,7 @@ Process {
 										Write-CMLogEntry -Value "An error occurred while downloading the BIOS update (single package match). Error message: $($_.Exception.Message)" -Severity 3; exit 14
 									}
 								} else {
-									Write-CMLogEntry -Value "BIOS is already up to date with the latest $($PackageList[0].PackageVersion) version" -Severity 1
+									Write-CMLogEntry -Value "BIOS is already up to date with the latest $($PackageList[0].Version) version" -Severity 1
 								}
 							} else {
 								Write-CMLogEntry -Value "Task sequence engine would have been instructed to download package ID $($PackageList[0].PackageID) to %_SMSTSMDataPath%\BIOSPackage" -Severity 1
@@ -1180,17 +1178,17 @@ Process {
 								}
 							} elseif ($ComputerManufacturer -match "Hewlett-Packard|HP") {
 								# Determine the latest BIOS package by creation date
-								$PackageList = $PackageList | Sort-Object -Property PackageCreated -Descending | Select-Object -First 1
+								$PackageList = $PackageList | Sort-Object -Property SourceDate -Descending | Select-Object -First 1
 
 							} elseif ($ComputerManufacturer -match "Microsoft") {
-								$PackageList = $PackageList | Sort-Object -Property PackageCreated -Descending | Select-Object -First 1
+								$PackageList = $PackageList | Sort-Object -Property SourceDate -Descending | Select-Object -First 1
 							}
 							if ($PackageList.Count -eq 1) {
 								# Check if BIOS package is newer than currently installed
 								if ($ComputerManufacturer -match "Dell") {
 									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -ComputerManufacturer $ComputerManufacturer
 								} elseif ($ComputerManufacturer -match "Lenovo") {
-									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -AvailableBIOSReleaseDate $(($PackageList[0].PackageDescription).Split(":")[2]).Trimend(")") -ComputerManufacturer $ComputerManufacturer
+									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -AvailableBIOSReleaseDate $(($PackageList[0].Description).Split(":")[2].Trimend(")")) -ComputerManufacturer $ComputerManufacturer
 								} elseif ($ComputerManufacturer -match "Hewlett-Packard|HP") {
 									Compare-BIOSVersion -AvailableBIOSVersion $PackageList[0].Version -ComputerManufacturer $ComputerManufacturer
 								} elseif ($ComputerManufacturer -match "Microsoft") {
